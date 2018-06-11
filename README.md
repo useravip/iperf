@@ -100,6 +100,13 @@ submit an issue.  Please use one of the mailing lists for that.
 Changes from iperf 2.x
 ----------------------
 
+(Note that iperf2 is no longer being developed by its original
+maintainers.  However, beginning in 2014, another developer began
+fixing bugs and enhancing functionality, and generating releases of
+iperf2.  Both projects (as of late 2017) are currently being developed
+actively, but independently.  The continuing iperf2 development
+project can be found at https://sourceforge.net/projects/iperf2/.)
+
 New options:
 
     -V, --verbose             more detailed output than before
@@ -156,7 +163,7 @@ responsibility for the content of these pages.
 Copyright
 ---------
 
-iperf, Copyright (c) 2014-2017, The Regents of the University of
+iperf, Copyright (c) 2014-2018, The Regents of the University of
 California, through Lawrence Berkeley National Laboratory (subject
 to receipt of any required approvals from the U.S. Dept. of
 Energy).  All rights reserved.

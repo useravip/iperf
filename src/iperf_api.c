@@ -1,5 +1,5 @@
 /*
- * iperf, Copyright (c) 2014-2017, The Regents of the University of
+ * iperf, Copyright (c) 2014-2018, The Regents of the University of
  * California, through Lawrence Berkeley National Laboratory (subject
  * to receipt of any required approvals from the U.S. Dept. of
  * Energy).  All rights reserved.
@@ -24,7 +24,9 @@
  * This code is distributed under a BSD style license, see the LICENSE file
  * for complete information.
  */
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
 #define __USE_GNU
 
 #include "iperf_config.h"
@@ -32,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <getopt.h>
 #include <errno.h>
 #include <signal.h>
@@ -43,7 +46,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <pthread.h>
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
@@ -61,6 +63,10 @@
 #include <sys/cpuset.h>
 #endif /* HAVE_CPUSET_SETAFFINITY */
 
+#if defined(HAVE_SETPROCESSAFFINITYMASK)
+#include <Windows.h>
+#endif /* HAVE_SETPROCESSAFFINITYMASK */
+
 #include "net.h"
 #include "iperf.h"
 #include "iperf_api.h"
@@ -73,11 +79,11 @@
 
 #include "cjson.h"
 #include "units.h"
-#include "tcp_window_size.h"
 #include "iperf_util.h"
 #include "iperf_locale.h"
 #include "version.h"
 #if defined(HAVE_SSL)
+#include <openssl/bio.h>
 #include "iperf_auth.h"
 #endif /* HAVE_SSL */
 
@@ -105,7 +111,7 @@ usage()
 void
 usage_long(FILE *f)
 {
-    fprintf(f, usage_longstr, UDP_RATE / (1024*1024), DURATION, DEFAULT_TCP_BLKSIZE / 1024, DEFAULT_UDP_BLKSIZE / 1024);
+    fprintf(f, usage_longstr, UDP_RATE / (1024*1024), DURATION, DEFAULT_TCP_BLKSIZE / 1024, DEFAULT_UDP_BLKSIZE);
 }
 
 
@@ -285,6 +291,18 @@ iperf_get_test_one_off(struct iperf_test *ipt)
     return ipt->one_off;
 }
 
+int
+iperf_get_test_tos(struct iperf_test *ipt)
+{
+    return ipt->settings->tos;
+}
+
+char *
+iperf_get_test_extra_data(struct iperf_test *ipt)
+{
+    return ipt->extra_data;
+}
+
 /************** Setter routines for some fields inside iperf_test *************/
 
 void
@@ -444,6 +462,26 @@ iperf_set_test_unit_format(struct iperf_test *ipt, char unit_format)
     ipt->settings->unit_format = unit_format;
 }
 
+#if defined(HAVE_SSL)
+void
+iperf_set_test_client_username(struct iperf_test *ipt, char *client_username)
+{
+    ipt->settings->client_username = client_username;
+}
+
+void
+iperf_set_test_client_password(struct iperf_test *ipt, char *client_password)
+{
+    ipt->settings->client_password = client_password;
+}
+
+void
+iperf_set_test_client_rsa_pubkey(struct iperf_test *ipt, char *client_rsa_pubkey_base64)
+{
+    ipt->settings->client_rsa_pubkey = load_pubkey_from_base64(client_rsa_pubkey_base64);
+}
+#endif // HAVE_SSL
+
 void
 iperf_set_test_bind_address(struct iperf_test *ipt, char *bnd_address)
 {
@@ -460,6 +498,18 @@ void
 iperf_set_test_one_off(struct iperf_test *ipt, int one_off)
 {
     ipt->one_off = one_off;
+}
+
+void
+iperf_set_test_tos(struct iperf_test *ipt, int tos)
+{
+    ipt->settings->tos = tos;
+}
+
+void
+iperf_set_test_extra_data(struct iperf_test *ipt, char *dat)
+{
+    ipt->extra_data = dat;
 }
 
 /********************** Get/set test protocol structure ***********************/
@@ -510,7 +560,7 @@ void
 iperf_on_test_start(struct iperf_test *test)
 {
     if (test->json_output) {
-	cJSON_AddItemToObject(test->json_start, "test_start", iperf_json_printf("protocol: %s  num_streams: %d  blksize: %d  omit: %d  duration: %d  bytes: %d  blocks: %d  reverse: %d  tos: %d", test->protocol->name, (int64_t) test->num_streams, (int64_t) test->settings->blksize, (int64_t) test->omit, (int64_t) test->duration, (int64_t) test->settings->bytes, (int64_t) test->settings->blocks, test->reverse?(int64_t)1:(int64_t)0, test->settings->tos));
+	cJSON_AddItemToObject(test->json_start, "test_start", iperf_json_printf("protocol: %s  num_streams: %d  blksize: %d  omit: %d  duration: %d  bytes: %d  blocks: %d  reverse: %d  tos: %d", test->protocol->name, (int64_t) test->num_streams, (int64_t) test->settings->blksize, (int64_t) test->omit, (int64_t) test->duration, (int64_t) test->settings->bytes, (int64_t) test->settings->blocks, test->reverse?(int64_t)1:(int64_t)0, (int64_t) test->settings->tos));
     } else {
 	if (test->verbose) {
 	    if (test->settings->bytes)
@@ -650,12 +700,14 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"version6", no_argument, NULL, '6'},
         {"tos", required_argument, NULL, 'S'},
         {"dscp", required_argument, NULL, OPT_DSCP},
+	{"extra-data", required_argument, NULL, OPT_EXTRA_DATA},
 #if defined(HAVE_FLOWLABEL)
         {"flowlabel", required_argument, NULL, 'L'},
 #endif /* HAVE_FLOWLABEL */
         {"zerocopy", no_argument, NULL, 'Z'},
         {"omit", required_argument, NULL, 'O'},
         {"file", required_argument, NULL, 'F'},
+        {"repeating-payload", no_argument, NULL, OPT_REPEATING_PAYLOAD},
 #if defined(HAVE_CPU_AFFINITY)
         {"affinity", required_argument, NULL, 'A'},
 #endif /* HAVE_CPU_AFFINITY */
@@ -702,7 +754,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
     blksize = 0;
     server_flag = client_flag = rate_flag = duration_flag = 0;
 #if defined(HAVE_SSL)
-    char *client_username = NULL, *client_rsa_public_key = NULL;
+    char *client_username = NULL, *client_rsa_public_key = NULL, *server_rsa_private_key = NULL;
 #endif /* HAVE_SSL */
 
     while ((flag = getopt_long(argc, argv, "p:f:i:D1VJvsc:ub:t:n:k:l:P:Rw:B:M:N46S:L:ZO:F:A:T:C:dI:hX:", longopts, NULL)) != -1) {
@@ -898,6 +950,10 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 		}
 		client_flag = 1;
                 break;
+	    case OPT_EXTRA_DATA:
+		test->extra_data = strdup(optarg);
+		client_flag = 1;
+	        break;
             case 'L':
 #if defined(HAVE_FLOWLABEL)
                 test->settings->flowlabel = strtol(optarg, &endptr, 0);
@@ -933,6 +989,10 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 }
                 test->zerocopy = 1;
 		client_flag = 1;
+                break;
+            case OPT_REPEATING_PAYLOAD:
+                test->repeating_payload = 1;
+                client_flag = 1;
                 break;
             case 'O':
                 test->omit = atoi(optarg);
@@ -1027,7 +1087,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
             client_rsa_public_key = strdup(optarg);
             break;
         case OPT_SERVER_RSA_PRIVATE_KEY:
-            test->server_rsa_private_key = strdup(optarg);
+            server_rsa_private_key = strdup(optarg);
             break;
         case OPT_SERVER_AUTHORIZED_USERS:
             test->server_authorized_users = strdup(optarg);
@@ -1091,29 +1151,31 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
             return -1;
         }
 
-        if (test_load_pubkey(client_rsa_public_key) < 0){
+        if (test_load_pubkey_from_file(client_rsa_public_key) < 0){
             i_errno = IESETCLIENTAUTH;
             return -1;
         }
-        encode_auth_setting(client_username, client_password, client_rsa_public_key, &test->settings->authtoken);
+
+        test->settings->client_username = client_username;
+        test->settings->client_password = client_password;
+        test->settings->client_rsa_pubkey = load_pubkey_from_file(client_rsa_public_key);
     }
 
-    if (test->role == 'c' && (test->server_rsa_private_key || test->server_authorized_users)){
+    if (test->role == 'c' && (server_rsa_private_key || test->server_authorized_users)){
         i_errno = IESERVERONLY;
         return -1;
-    } else if (test->role == 's' && (test->server_rsa_private_key || test->server_authorized_users) && 
-        !(test->server_rsa_private_key && test->server_authorized_users)) {
+    } else if (test->role == 's' && (server_rsa_private_key || test->server_authorized_users) && 
+        !(server_rsa_private_key && test->server_authorized_users)) {
          i_errno = IESETSERVERAUTH;
         return -1;
-    } else if (test->role == 's' && test->server_rsa_private_key && test_load_private_key(test->server_rsa_private_key) < 0){
+    } else if (test->role == 's' && server_rsa_private_key && test_load_private_key_from_file(server_rsa_private_key) < 0){
         i_errno = IESETSERVERAUTH;
         return -1;
+    } else {
+        test->server_rsa_private_key = load_privkey_from_file(server_rsa_private_key);
     }
+
 #endif //HAVE_SSL
-    if (!test->bind_address && test->bind_port) {
-        i_errno = IEBIND;
-        return -1;
-    }
     if (blksize == 0) {
 	if (test->protocol->id == Pudp)
 	    blksize = 0;	/* try to dynamically determine from MSS */
@@ -1162,6 +1224,19 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
     if ((test->role != 'c') && (test->role != 's')) {
         i_errno = IENOROLE;
         return -1;
+    }
+
+    /* Show warning if JSON output is used with explicit report format */
+    if ((test->json_output) && (test->settings->unit_format != 'a')) {
+        warning("Report format (-f) flag ignored with JSON output (-J)");
+    }
+
+    /* Show warning if JSON output is used with verbose or debug flags */
+    if (test->json_output && test->verbose) {
+        warning("Verbose output (-v) may interfere with JSON output (-J)");
+    }
+    if (test->json_output && test->debug) {
+        warning("Debug output (-d) may interfere with JSON output (-J)");
     }
 
     return 0;
@@ -1497,6 +1572,8 @@ send_parameters(struct iperf_test *test)
 	    cJSON_AddNumberToObject(j, "flowlabel", test->settings->flowlabel);
 	if (test->title)
 	    cJSON_AddStringToObject(j, "title", test->title);
+	if (test->extra_data)
+	    cJSON_AddStringToObject(j, "extra_data", test->extra_data);
 	if (test->congestion)
 	    cJSON_AddStringToObject(j, "congestion", test->congestion);
 	if (test->congestion_used)
@@ -1506,8 +1583,10 @@ send_parameters(struct iperf_test *test)
 	if (test->udp_counters_64bit)
 	    cJSON_AddNumberToObject(j, "udp_counters_64bit", iperf_get_test_udp_counters_64bit(test));
 #if defined(HAVE_SSL)
-    if (test->settings->authtoken)
+    if (test->settings->client_username && test->settings->client_password && test->settings->client_rsa_pubkey){
+        encode_auth_setting(test->settings->client_username, test->settings->client_password, test->settings->client_rsa_pubkey, &test->settings->authtoken);
         cJSON_AddStringToObject(j, "authtoken", test->settings->authtoken);
+    }
 #endif // HAVE_SSL
 	cJSON_AddStringToObject(j, "client_version", IPERF_VERSION);
 
@@ -1584,6 +1663,8 @@ get_parameters(struct iperf_test *test)
 	    test->settings->flowlabel = j_p->valueint;
 	if ((j_p = cJSON_GetObjectItem(j, "title")) != NULL)
 	    test->title = strdup(j_p->valuestring);
+	if ((j_p = cJSON_GetObjectItem(j, "extra_data")) != NULL)
+	    test->extra_data = strdup(j_p->valuestring);
 	if ((j_p = cJSON_GetObjectItem(j, "congestion")) != NULL)
 	    test->congestion = strdup(j_p->valuestring);
 	if ((j_p = cJSON_GetObjectItem(j, "congestion_used")) != NULL)
@@ -2050,6 +2131,7 @@ iperf_defaults(struct iperf_test *testp)
     CPU_ZERO(&testp->cpumask);
 #endif /* HAVE_CPUSET_SETAFFINITY */
     testp->title = NULL;
+    testp->extra_data = NULL;
     testp->congestion = NULL;
     testp->congestion_used = NULL;
     testp->remote_congestion_used = NULL;
@@ -2182,6 +2264,8 @@ iperf_free_test(struct iperf_test *test)
     free(test->settings);
     if (test->title)
 	free(test->title);
+    if (test->extra_data)
+	free(test->extra_data);
     if (test->congestion)
 	free(test->congestion);
     if (test->congestion_used)
@@ -2305,16 +2389,36 @@ iperf_reset_test(struct iperf_test *test)
     test->settings->burst = 0;
     test->settings->mss = 0;
     test->settings->tos = 0;
+
+#if defined(HAVE_SSL)
     if (test->settings->authtoken) {
-	free(test->settings->authtoken);
-	test->settings->authtoken = NULL;
+        free(test->settings->authtoken);
+        test->settings->authtoken = NULL;
     }
+    if (test->settings->client_username) {
+        free(test->settings->client_username);
+        test->settings->client_username = NULL;
+    }
+    if (test->settings->client_password) {
+        free(test->settings->client_password);
+        test->settings->client_password = NULL;
+    }
+    if (test->settings->client_rsa_pubkey) {
+        EVP_PKEY_free(test->settings->client_rsa_pubkey);
+        test->settings->client_rsa_pubkey = NULL;
+    }
+#endif /* HAVE_SSL */
+
     memset(test->cookie, 0, COOKIE_SIZE);
     test->multisend = 10;	/* arbitrary */
     test->udp_counters_64bit = 0;
     if (test->title) {
 	free(test->title);
 	test->title = NULL;
+    }
+    if (test->extra_data) {
+	free(test->extra_data);
+	test->extra_data = NULL;
     }
 
     /* Free output line buffers, if any (on the server only) */
@@ -2482,7 +2586,7 @@ iperf_print_intermediate(struct iperf_test *test)
 	    double interval_len = timeval_diff(&irp->interval_start_time,
 					       &irp->interval_end_time);
 	    if (test->debug) {
-		printf("interval_len %f bytes_transferred %lu\n", interval_len, irp->bytes_transferred);
+		printf("interval_len %f bytes_transferred %" PRIu64 "\n", interval_len, irp->bytes_transferred);
 	    }
 
 	    /*
@@ -2874,7 +2978,7 @@ iperf_print_results(struct iperf_test *test)
 		else
 		    if (test->role == 's' && !test->sender) {
 		        if (test->verbose)
-			    iperf_printf(test, report_sender_not_available_format, sp->socket);
+			    iperf_printf(test, report_sender_not_available_summary_format, "SUM");
 		    }
 		    else {
 		      iperf_printf(test, report_sum_bw_retrans_format, start_time, sender_time, ubuf, nbuf, total_retransmits, report_sender);
@@ -2886,7 +2990,7 @@ iperf_print_results(struct iperf_test *test)
 		else
 		    if (test->role == 's' && !test->sender) {
 		        if (test->verbose) 
-			    iperf_printf(test, report_sender_not_available_format, sp->socket);
+			    iperf_printf(test, report_sender_not_available_summary_format, "SUM");
 		    }
 		    else {
 		        iperf_printf(test, report_sum_bw_format, start_time, sender_time, ubuf, nbuf, report_sender);
@@ -3157,7 +3261,8 @@ struct iperf_stream *
 iperf_new_stream(struct iperf_test *test, int s)
 {
     struct iperf_stream *sp;
-    
+    int ret = 0;
+
     char template[1024];
     if (test->tmp_template) {
         snprintf(template, sizeof(template) / sizeof(char), "%s", test->tmp_template);
@@ -3247,8 +3352,12 @@ iperf_new_stream(struct iperf_test *test, int s)
         sp->diskfile_fd = -1;
 
     /* Initialize stream */
-    if ((readentropy(sp->buffer, test->settings->blksize) < 0) ||
-        (iperf_init_stream(sp, test) < 0)) {
+    if (test->repeating_payload)
+        fill_with_repeating_pattern(sp->buffer, test->settings->blksize);
+    else
+        ret = readentropy(sp->buffer, test->settings->blksize);
+
+    if ((ret < 0) || (iperf_init_stream(sp, test) < 0)) {
         close(sp->buffer_fd);
         munmap(sp->buffer, sp->test->settings->blksize);
         free(sp->result);
@@ -3438,6 +3547,36 @@ iperf_create_pidfile(struct iperf_test *test)
     if (test->pidfile) {
 	int fd;
 	char buf[8];
+
+	/* See if the file already exists and we can read it. */
+	fd = open(test->pidfile, O_RDONLY, 0);
+	if (fd >= 0) {
+	    if (read(fd, buf, sizeof(buf) - 1) >= 0) {
+
+		/* We read some bytes, see if they correspond to a valid PID */
+		pid_t pid;
+		pid = atoi(buf);
+		if (pid > 0) {
+
+		    /* See if the process exists. */
+		    if (kill(pid, 0) == 0) {
+			/*
+			 * Make sure not to try to delete existing PID file by
+			 * scribbling over the pathname we'd use to refer to it.
+			 * Then exit with an error.
+			 */
+			free(test->pidfile);
+			test->pidfile = NULL;
+			iperf_errexit(test, "Another instance of iperf3 appears to be running");
+		    }
+		}
+	    }
+	}
+	
+	/*
+	 * File didn't exist, we couldn't read it, or it didn't correspond to 
+	 * a running process.  Try to create it. 
+	 */
 	fd = open(test->pidfile, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR|S_IWUSR);
 	if (fd < 0) {
 	    return -1;
@@ -3495,6 +3634,8 @@ iperf_json_finish(struct iperf_test *test)
 {
     if (test->title)
 	cJSON_AddStringToObject(test->json_top, "title", test->title);
+    if (test->extra_data)
+	cJSON_AddStringToObject(test->json_top, "extra_data", test->extra_data);
     /* Include server output */
     if (test->json_server_output) {
 	cJSON_AddItemToObject(test->json_top, "server_output_json", test->json_server_output);
@@ -3513,7 +3654,7 @@ iperf_json_finish(struct iperf_test *test)
 }
 
 
-/* CPU affinity stuff - Linux and FreeBSD only. */
+/* CPU affinity stuff - Linux, FreeBSD, and Windows only. */
 
 int
 iperf_setaffinity(struct iperf_test *test, int affinity)
@@ -3546,10 +3687,19 @@ iperf_setaffinity(struct iperf_test *test, int affinity)
         return -1;
     }
     return 0;
-#else /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY */
+#elif defined(HAVE_SETPROCESSAFFINITYMASK)
+	HANDLE process = GetCurrentProcess();
+	DWORD_PTR processAffinityMask = 1 << affinity;
+
+	if (SetProcessAffinityMask(process, processAffinityMask) == 0) {
+		i_errno = IEAFFINITY;
+		return -1;
+	}
+	return 0;
+#else /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY nor HAVE_SETPROCESSAFFINITYMASK */
     i_errno = IEAFFINITY;
     return -1;
-#endif /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY */
+#endif /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY nor HAVE_SETPROCESSAFFINITYMASK */
 }
 
 int
@@ -3574,10 +3724,21 @@ iperf_clearaffinity(struct iperf_test *test)
         return -1;
     }
     return 0;
-#else /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY */
+#elif defined(HAVE_SETPROCESSAFFINITYMASK)
+	HANDLE process = GetCurrentProcess();
+	DWORD_PTR processAffinityMask;
+	DWORD_PTR lpSystemAffinityMask;
+
+	if (GetProcessAffinityMask(process, &processAffinityMask, &lpSystemAffinityMask) == 0
+			|| SetProcessAffinityMask(process, lpSystemAffinityMask) == 0) {
+		i_errno = IEAFFINITY;
+		return -1;
+	}
+	return 0;
+#else /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY nor HAVE_SETPROCESSAFFINITYMASK */
     i_errno = IEAFFINITY;
     return -1;
-#endif /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY */
+#endif /* neither HAVE_SCHED_SETAFFINITY nor HAVE_CPUSET_SETAFFINITY nor HAVE_SETPROCESSAFFINITYMASK */
 }
 
 int
