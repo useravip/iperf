@@ -25,16 +25,14 @@
  * file for complete information.
  */
 #include <assert.h>
-#ifdef HAVE_STDINT_H
 #include <stdint.h>
-#endif
 #include <stdio.h>
 #include <string.h>
 
 #include "iperf.h"
 #include "units.h"
 
-int 
+int
 main(int argc, char **argv)
 {
     iperf_size_t llu;

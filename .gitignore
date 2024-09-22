@@ -24,7 +24,10 @@ src/iperf3_profile
 src/t_timer
 src/t_units
 src/t_uuid
+src/t_api
+src/t_auth
 examples/.libs
 examples/Makefile
 examples/mic
 examples/mis
+.vscode/

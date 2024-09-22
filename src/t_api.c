@@ -1,5 +1,5 @@
 /*
- * iperf, Copyright (c) 2014-2017, The Regents of the University of
+ * iperf, Copyright (c) 2017-2020, The Regents of the University of
  * California, through Lawrence Berkeley National Laboratory (subject
  * to receipt of any required approvals from the U.S. Dept. of
  * Energy).  All rights reserved.
@@ -24,46 +24,67 @@
  * This code is distributed under a BSD style license, see the LICENSE
  * file for complete information.
  */
-#ifndef __IPERF_UTIL_H
-#define __IPERF_UTIL_H
 
-#include "iperf_config.h"
-#include "cjson.h"
-#include <sys/select.h>
-#include <stddef.h>
 
-int readentropy(void *out, size_t outsize);
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
-void fill_with_repeating_pattern(void *out, size_t outsize);
+#include "iperf.h"
+#include "iperf_api.h"
 
-void make_cookie(char *);
+#include "version.h"
 
-int is_closed(int);
+#include "units.h"
 
-double timeval_to_double(struct timeval *tv);
+int test_iperf_set_test_bind_port(struct iperf_test *test)
+{
+    int port;
+    port = iperf_get_test_bind_port(test);
+    iperf_set_test_bind_port(test, 5202);
+    port = iperf_get_test_bind_port(test);
+    assert(port == 5202);
+    return 0;
+}
 
-int timeval_equals(struct timeval *tv0, struct timeval *tv1);
+int test_iperf_set_mss(struct iperf_test *test)
+{
+    int mss = iperf_get_test_mss(test);
+    iperf_set_test_mss(test, 535);
+    mss = iperf_get_test_mss(test);
+    assert(mss == 535);
+    return 0;
+}
 
-double timeval_diff(struct timeval *tv0, struct timeval *tv1);
+int
+main(int argc, char **argv)
+{
+    const char *ver;
+    struct iperf_test *test;
+    int sint, gint;
 
-void cpu_util(double pcpu[3]);
+    ver = iperf_get_iperf_version();
+    assert(strcmp(ver, IPERF_VERSION) == 0);
 
-const char* get_system_info(void);
+    test = iperf_new_test();
+    assert(test != NULL);
 
-const char* get_optional_features(void);
+    iperf_defaults(test);
 
-cJSON* iperf_json_printf(const char *format, ...);
+    sint = 10;
+    iperf_set_test_connect_timeout(test, sint);
+    gint = iperf_get_test_connect_timeout(test);
+    assert(sint == gint);
 
-void iperf_dump_fdset(FILE *fp, const char *str, int nfds, fd_set *fds);
+    int ret;
+    ret = test_iperf_set_test_bind_port(test);
 
-#ifndef HAVE_DAEMON
-extern int daemon(int nochdir, int noclose);
-#endif /* HAVE_DAEMON */
+    ret += test_iperf_set_mss(test);
 
-#ifndef HAVE_GETLINE
-ssize_t getline(char **buf, size_t *bufsiz, FILE *fp);
-#endif /* HAVE_GETLINE */
-
-char * state_to_text(signed char state);
-
-#endif
+    if (ret < 0)
+    {
+        return -1;
+    }
+    return 0;
+}

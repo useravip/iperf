@@ -1,4 +1,4 @@
-.TH LIBIPERF 3 "April 2018" ESnet "User Manuals"
+.TH LIBIPERF 3 "January 2022" ESnet "User Manuals"
 .SH NAME
 libiperf \- API for iperf3 network throughput tester
 
@@ -25,12 +25,14 @@ Setting test parameters:
 .nf
     void iperf_set_test_role( struct iperf_test *pt, char role );
     void iperf_set_test_bind_address( struct iperf_test *t, char *bind_address );
+    void iperf_set_test_bind_dev( struct iperf_test *t, char *bind_dev );
     void iperf_set_test_server_hostname( struct iperf_test *t, char *server_host );
     void iperf_set_test_server_port( struct iperf_test *t, int server_port );
     void iperf_set_test_duration( struct iperf_test *t, int duration );
     void iperf_set_test_blksize( struct iperf_test *t, int blksize );
     void iperf_set_test_num_streams( struct iperf_test *t, int num_streams );
     void iperf_set_test_json_output( struct iperf_test *t, int json_output );
+    void iperf_set_test_json_stream( struct iperf_test *t, int json_stream );
     int iperf_has_zerocopy( void );
     void iperf_set_test_zerocopy( struct iperf_test* t, int zerocopy );
     void iperf_set_test_tos( struct iperf_test* t, int tos );
@@ -106,8 +108,8 @@ of the iperf3 source tree.
 .SH AUTHORS
 A list of the contributors to iperf3 can be found within the
 documentation located at
-\fChttp://software.es.net/iperf/dev.html#authors\fR.
+\fChttps://software.es.net/iperf/dev.html#authors\fR.
 
 .SH "SEE ALSO"
 iperf3(1),
-http://software.es.net/iperf/
+https://software.es.net/iperf/

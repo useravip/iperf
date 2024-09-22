@@ -1,6 +1,169 @@
 iperf3 Project News
 ===================
 
+2024-05-13:  ipef-3.17.1 released
+---------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.17.1.tar.gz
+| SHA256: ``84404ca8431b595e86c473d8f23d8bb102810001f15feaf610effd3b318788aa``
+
+iperf-3.17.1 fixes some issues with version numbers in various
+places. It is otherwise identical to iperf-3.17.
+
+
+2024-05-10:  iperf-3.17 released
+--------------------------------
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.17.tar.gz
+| SHA256: ``077ede831b11b733ecf8b273abd97f9630fd7448d3ec1eaa789f396d82c8c943``
+
+iperf 3.17 contains a fix for a minor security vulnerability related
+to iperf3's authentication feature and its use of RSA-encrypted
+credentials. The release notes contain more
+details on this breaking change, and how to revert to older, less
+secure behavior if needed for backward compatibility with older
+versions of iperf3.
+
+This version also contains a new streaming JSON output format (enabled
+with the --json-stream) option, and a number of other bug fixes.
+
+2023-12-01:  iperf-3.16 released
+--------------------------------
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.16.tar.gz
+| SHA256: ``cc740c6bbea104398cc3e466befc515a25896ec85e44a662d5f4a767b9cf713e``
+
+iperf 3.16 uses multiple threads to serve parallel tests for improved
+throughput on high-speed links. It also includes support for
+OpenSSL 3. More details are provided in the release notes.
+
+2023-09-14:  iperf-3.15 released
+--------------------------------
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.15.tar.gz
+| SHA256:  ``bdb77c11f72bce90214883159577fa24412013e62b2083cf5f54391d79b1d8ff``
+
+iperf 3.15 fixes that could cause an iperf3 server process to hang
+waiting for input on the control connection. For more information,
+please see:
+
+https://downloads.es.net/pub/iperf/esnet-secadv-2023-0002.txt.asc
+
+This version of iperf3 also includes several other minor bug fixes,
+which are summarized in the release notes.
+
+2023-07-07:  iperf-3.14 released
+--------------------------------
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.14.tar.gz
+| SHA256:  ``723fcc430a027bc6952628fa2a3ac77584a1d0bd328275e573fc9b206c155004``
+
+iperf 3.14 fixes a memory allocation hazard that allowed a remote user
+to crash an iperf3 process (server or client).
+
+More information on this specific fix can be found at:
+
+https://downloads.es.net/pub/iperf/esnet-secadv-2023-0001.txt.asc
+
+This version of iperf3 also includes a number of minor bug fixes,
+which are summarized in the release notes.
+
+2023-02-16:  iperf-3.13 released
+----------------------------------
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.13.tar.gz
+| SHA256:  ``bee427aeb13d6a2ee22073f23261f63712d82befaa83ac8cb4db5da4c2bdc865``
+
+iperf 3.13 is primarily a bugfix release.
+
+
+2022-09-30:  iperf-3.12 released
+----------------------------------
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.12.tar.gz
+| SHA256:  ``72034ecfb6a7d6d67e384e19fb6efff3236ca4f7ed4c518d7db649c447e1ffd6``
+
+iperf 3.12 is principally a bugfix release, although it includes an
+updated version of cJSON and adds a few new features.
+
+
+2022-01-28:  iperf-3.11 released
+----------------------------------
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.11.tar.gz
+| SHA256:  ``de8cb409fad61a0574f4cb07eb19ce1159707403ac2dc01b5d175e91240b7e5f``
+
+iperf 3.11 is principally a bugfix release. Also GitHub
+Discussions are now supported.
+
+
+2021-06-02:  iperf-3.10.1 released
+----------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.10.1.tar.gz
+| SHA256:  ``03bc9760cc54a245191d46bfc8edaf8a4750f0e87abca6764486972044d6715a  iperf-3.10.1.tar.gz``
+
+iperf 3.10.1 fixes a problem with the configure script that made it
+make not work correctly in some circumstances. It is functionally
+identical to iperf 3.10.
+
+2021-05-26:  iperf-3.10 released
+--------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.10.tar.gz
+| SHA256:  ``4390982928542256c17d6dd1f56eede9092649ebfd8a97c8cecfad12d238ad57  iperf-3.10.tar.gz``
+
+iperf 3.10 is principally a bugfix release. A few new features have
+been added (``--time-skew-threshold``, ``--bind-dev``,
+``--rcv-timeout``, and ``--dont-fragment``).  More information on
+these new features can be found in the release notes.
+
+2020-08-17:  iperf-3.9 released
+---------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.9.tar.gz
+| SHA256:  ``24b63a26382325f759f11d421779a937b63ca1bc17c44587d2fcfedab60ac038  iperf-3.9.tar.gz``
+
+iperf 3.9 adds a ``--timestamps`` flag, which prepends a timestamp to
+each output line.  A new ``--server-bitrate-limit`` flag has been
+added as a server command-line argument, and allows an iperf3 server
+to enforce a maximum throughput rate.  More information on these new
+features can be found in the release notes.
+
+2020-06-10:  iperf-3.8.1 released
+---------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.8.1.tar.gz
+| SHA256:  ``e5b080f3273a8a715a4100f13826ac2ca31cc7b1315925631b2ecf64957ded96 iperf-3.8.1.tar.gz``
+
+iperf 3.8.1 fixes a regression with ``make install`` in iperf 3.8.  It
+is otherwise identical to iperf 3.8.
+
+2020-06-08:  iperf-3.8 released
+-------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.8.tar.gz
+| SHA256:  ``edc1c317b0ae31925e5eb84f0295faefbaa1db3229f4693e11d954d114de4bcd  iperf-3.8.tar.gz``
+
+iperf 3.8 contains minor bugfixes and enhancements.
+
+
+2019-06-21:  iperf-3.7 released
+-------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.7.tar.gz
+| SHA256:  ``d846040224317caf2f75c843d309a950a7db23f9b44b94688ccbe557d6d1710c  iperf-3.7.tar.gz``
+
+iperf 3.7 adds the ``--bidir`` flag for bidirectional tests, includes
+some minor enhancements, and fixes a number of bugs.  More details can
+be found in the release notes.
+
+Note:  Documentation for the ``--bidir`` flag was inadvertently
+omitted from the manual page.  This will be fixed in a future
+release.
+
+2018-06-25:  iperf-3.6 released
+-------------------------------
+
+| URL:  https://downloads.es.net/pub/iperf/iperf-3.6.tar.gz
+| SHA256:  ``de5d51e46dc460cc590fb4d44f95e7cad54b74fea1eba7d6ebd6f8887d75946e  iperf-3.6.tar.gz``
+
+iperf 3.6 adds the ``--extra-data`` and ``--repeating-payload``
+options and fixes some minor bugs.
+
 2018-03-02:  iperf-3.5 released
 -------------------------------
 
@@ -232,7 +395,7 @@ This maintenance release includes the following bug fixes:
 * Some portability fixes for OpenBSD and Solaris have been merged from
   the mainline.
 
-As always, more details can be found in the ``RELEASE_NOTES`` file in
+As always, more details can be found in the ``RELNOTES.md`` file in
 the source distribution.
 
 2014-06-16:  Project documentation on GitHub Pages
@@ -263,7 +426,7 @@ enhancements and bug fixes.  Highlights:
 * A number of bugs with ``--json`` output have been fixed.
 
 A more extensive list of changes can always be found in the
-``RELEASE_NOTES`` file in the source distribution.
+``RELNOTES.md`` file in the source distribution.
 
 Note:  An iperf-3.0.4 release was planned and tagged, but not
 officially released.
@@ -295,7 +458,7 @@ This is the second maintenance release of iperf 3.0, containing a few bug fixes 
 * A possible buffer overflow related to error output has been fixed.
   (This is not believed to be exploitable.)
 
-More information on changes can be found in the ``RELEASE_NOTES``
+More information on changes can be found in the ``RELNOTES.md``
 file in the source distribution.
 
 2014-03-10:  iperf-3.0.2 released
@@ -318,7 +481,7 @@ GitHub.  Of particular interest:
 * libiperf is now built as both a shared and static library; by
   default, the iperf3 binary links to the shared library.
 
-More information on changes can be found in the ``RELEASE_NOTES``
+More information on changes can be found in the ``RELNOTES.md``
 file in the source distribution.
 
 2014-02-28:  iperf migrated to GitHub
@@ -336,6 +499,5 @@ https://github.com/esnet/iperf
 
 During development, there were various distributions of the source
 code unofficially released carrying a 3.0.0 version number.  Because
-of the possiblity for confusion, this first public release of iperf3
+of the possibility for confusion, this first public release of iperf3
 was numbered 3.0.1.
-

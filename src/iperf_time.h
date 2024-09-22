@@ -1,5 +1,5 @@
 /*
- * iperf, Copyright (c) 2014-2017, The Regents of the University of
+ * iperf, Copyright (c) 2014-2018, The Regents of the University of
  * California, through Lawrence Berkeley National Laboratory (subject
  * to receipt of any required approvals from the U.S. Dept. of
  * Energy).  All rights reserved.
@@ -24,46 +24,26 @@
  * This code is distributed under a BSD style license, see the LICENSE
  * file for complete information.
  */
-#ifndef __IPERF_UTIL_H
-#define __IPERF_UTIL_H
+#ifndef __IPERF_TIME_H
+#define __IPERF_TIME_H
 
-#include "iperf_config.h"
-#include "cjson.h"
-#include <sys/select.h>
-#include <stddef.h>
+#include <stdint.h>
 
-int readentropy(void *out, size_t outsize);
+struct iperf_time {
+    uint32_t secs;
+    uint32_t usecs;
+};
 
-void fill_with_repeating_pattern(void *out, size_t outsize);
+int iperf_time_now(struct iperf_time *time1);
 
-void make_cookie(char *);
+void iperf_time_add_usecs(struct iperf_time *time1, uint64_t usecs);
 
-int is_closed(int);
+int iperf_time_compare(struct iperf_time *time1, struct iperf_time *time2);
 
-double timeval_to_double(struct timeval *tv);
+int iperf_time_diff(struct iperf_time *time1, struct iperf_time *time2, struct iperf_time *diff);
 
-int timeval_equals(struct timeval *tv0, struct timeval *tv1);
+uint64_t iperf_time_in_usecs(struct iperf_time *time);
 
-double timeval_diff(struct timeval *tv0, struct timeval *tv1);
-
-void cpu_util(double pcpu[3]);
-
-const char* get_system_info(void);
-
-const char* get_optional_features(void);
-
-cJSON* iperf_json_printf(const char *format, ...);
-
-void iperf_dump_fdset(FILE *fp, const char *str, int nfds, fd_set *fds);
-
-#ifndef HAVE_DAEMON
-extern int daemon(int nochdir, int noclose);
-#endif /* HAVE_DAEMON */
-
-#ifndef HAVE_GETLINE
-ssize_t getline(char **buf, size_t *bufsiz, FILE *fp);
-#endif /* HAVE_GETLINE */
-
-char * state_to_text(signed char state);
+double iperf_time_in_secs(struct iperf_time *time);
 
 #endif

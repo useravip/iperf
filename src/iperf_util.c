@@ -111,7 +111,7 @@ void fill_with_repeating_pattern(void *out, size_t outsize)
  */
 
 void
-make_cookie(char *cookie)
+make_cookie(const char *cookie)
 {
     unsigned char *out = (unsigned char*)cookie;
     size_t pos;
@@ -128,7 +128,7 @@ make_cookie(char *cookie)
 /* is_closed
  *
  * Test if the file descriptor fd is closed.
- * 
+ *
  * Iperf uses this function to test whether a TCP stream socket
  * is closed, because accepting and denying an invalid connection
  * in iperf_tcp_accept is not considered an error.
@@ -176,7 +176,7 @@ double
 timeval_diff(struct timeval * tv0, struct timeval * tv1)
 {
     double time1, time2;
-    
+
     time1 = tv0->tv_sec + (tv0->tv_usec / 1000000.0);
     time2 = tv1->tv_sec + (tv1->tv_usec / 1000000.0);
 
@@ -189,10 +189,10 @@ timeval_diff(struct timeval * tv0, struct timeval * tv1)
 void
 cpu_util(double pcpu[3])
 {
-    static struct timeval last;
+    static struct iperf_time last;
     static clock_t clast;
     static struct rusage rlast;
-    struct timeval temp;
+    struct iperf_time now, temp_time;
     clock_t ctemp;
     struct rusage rtemp;
     double timediff;
@@ -200,18 +200,19 @@ cpu_util(double pcpu[3])
     double systemdiff;
 
     if (pcpu == NULL) {
-        gettimeofday(&last, NULL);
+        iperf_time_now(&last);
         clast = clock();
 	getrusage(RUSAGE_SELF, &rlast);
         return;
     }
 
-    gettimeofday(&temp, NULL);
+    iperf_time_now(&now);
     ctemp = clock();
     getrusage(RUSAGE_SELF, &rtemp);
 
-    timediff = ((temp.tv_sec * 1000000.0 + temp.tv_usec) -
-                (last.tv_sec * 1000000.0 + last.tv_usec));
+    iperf_time_diff(&now, &last, &temp_time);
+    timediff = iperf_time_in_usecs(&temp_time);
+
     userdiff = ((rtemp.ru_utime.tv_sec * 1000000.0 + rtemp.ru_utime.tv_usec) -
                 (rlast.ru_utime.tv_sec * 1000000.0 + rlast.ru_utime.tv_usec));
     systemdiff = ((rtemp.ru_stime.tv_sec * 1000000.0 + rtemp.ru_stime.tv_usec) -
@@ -231,7 +232,7 @@ get_system_info(void)
     memset(buf, 0, 1024);
     uname(&uts);
 
-    snprintf(buf, sizeof(buf), "%s %s %s %s %s", uts.sysname, uts.nodename, 
+    snprintf(buf, sizeof(buf), "%s %s %s %s %s", uts.sysname, uts.nodename,
 	     uts.release, uts.version, uts.machine);
 
     return buf;
@@ -248,44 +249,44 @@ get_optional_features(void)
 
 #if defined(HAVE_CPU_AFFINITY)
     if (numfeatures > 0) {
-	strncat(features, ", ", 
+	strncat(features, ", ",
 		sizeof(features) - strlen(features) - 1);
     }
-    strncat(features, "CPU affinity setting", 
+    strncat(features, "CPU affinity setting",
 	sizeof(features) - strlen(features) - 1);
     numfeatures++;
 #endif /* HAVE_CPU_AFFINITY */
-    
+
 #if defined(HAVE_FLOWLABEL)
     if (numfeatures > 0) {
-	strncat(features, ", ", 
+	strncat(features, ", ",
 		sizeof(features) - strlen(features) - 1);
     }
-    strncat(features, "IPv6 flow label", 
+    strncat(features, "IPv6 flow label",
 	sizeof(features) - strlen(features) - 1);
     numfeatures++;
 #endif /* HAVE_FLOWLABEL */
-    
-#if defined(HAVE_SCTP)
+
+#if defined(HAVE_SCTP_H)
     if (numfeatures > 0) {
-	strncat(features, ", ", 
+	strncat(features, ", ",
 		sizeof(features) - strlen(features) - 1);
     }
-    strncat(features, "SCTP", 
+    strncat(features, "SCTP",
 	sizeof(features) - strlen(features) - 1);
     numfeatures++;
-#endif /* HAVE_SCTP */
-    
+#endif /* HAVE_SCTP_H */
+
 #if defined(HAVE_TCP_CONGESTION)
     if (numfeatures > 0) {
-	strncat(features, ", ", 
+	strncat(features, ", ",
 		sizeof(features) - strlen(features) - 1);
     }
-    strncat(features, "TCP congestion algorithm setting", 
+    strncat(features, "TCP congestion algorithm setting",
 	sizeof(features) - strlen(features) - 1);
     numfeatures++;
 #endif /* HAVE_TCP_CONGESTION */
-    
+
 #if defined(HAVE_SENDFILE)
     if (numfeatures > 0) {
 	strncat(features, ", ",
@@ -316,8 +317,38 @@ get_optional_features(void)
     numfeatures++;
 #endif /* HAVE_SSL */
 
+#if defined(HAVE_SO_BINDTODEVICE)
+    if (numfeatures > 0) {
+	strncat(features, ", ",
+		sizeof(features) - strlen(features) - 1);
+    }
+    strncat(features, "bind to device",
+	sizeof(features) - strlen(features) - 1);
+    numfeatures++;
+#endif /* HAVE_SO_BINDTODEVICE */
+
+#if defined(HAVE_DONT_FRAGMENT)
+    if (numfeatures > 0) {
+	strncat(features, ", ",
+		sizeof(features) - strlen(features) - 1);
+    }
+    strncat(features, "support IPv4 don't fragment",
+	sizeof(features) - strlen(features) - 1);
+    numfeatures++;
+#endif /* HAVE_DONT_FRAGMENT */
+
+#if defined(HAVE_PTHREAD)
+    if (numfeatures > 0) {
+	strncat(features, ", ",
+		sizeof(features) - strlen(features) - 1);
+    }
+    strncat(features, "POSIX threads",
+	sizeof(features) - strlen(features) - 1);
+    numfeatures++;
+#endif /* HAVE_PTHREAD */
+
     if (numfeatures == 0) {
-	strncat(features, "None", 
+	strncat(features, "None",
 		sizeof(features) - strlen(features) - 1);
     }
 
@@ -401,7 +432,7 @@ iperf_json_printf(const char *format, ...)
 
 /* Debugging routine to dump out an fd_set. */
 void
-iperf_dump_fdset(FILE *fp, char *str, int nfds, fd_set *fds)
+iperf_dump_fdset(FILE *fp, const char *str, int nfds, fd_set *fds)
 {
     int fd;
     int comma;
@@ -455,8 +486,8 @@ int daemon(int nochdir, int noclose)
 
     /*
      * Fork again to avoid becoming a session leader.
-     * This might only matter on old SVr4-derived OSs. 
-     * Note in particular that glibc and FreeBSD libc 
+     * This might only matter on old SVr4-derived OSs.
+     * Note in particular that glibc and FreeBSD libc
      * only fork once.
      */
     pid = fork();
@@ -564,3 +595,30 @@ getline(char **buf, size_t *bufsiz, FILE *fp)
 }
 
 #endif
+
+/* Translate numeric State to text - for debugging pupposes */
+char *
+state_to_text(signed char state)
+{
+    char *txt;
+
+    switch (state) {
+        case 0: txt = "Test reset"; break;
+        case TEST_START: txt = "TEST_START - starting a new test"; break;
+        case TEST_RUNNING: txt = "TEST_RUNNING"; break;
+        case TEST_END: txt = "TEST_END"; break;
+        case PARAM_EXCHANGE: txt = "PARAM_EXCHANGE - Client to Server Parameters Exchange"; break;
+        case CREATE_STREAMS: txt = "CREATE_STREAMS"; break;
+        case SERVER_TERMINATE: txt = "SERVER_TERMINATE"; break;
+        case CLIENT_TERMINATE: txt = "CLIENT_TERMINATE"; break;
+        case EXCHANGE_RESULTS: txt = "EXCHANGE_RESULTS"; break;
+        case DISPLAY_RESULTS: txt = "DISPLAY_RESULTS"; break;
+        case IPERF_START: txt = "IPERF_START - waiting for a new test"; break;
+        case IPERF_DONE: txt = "IPERF_DONE"; break;
+        case ACCESS_DENIED: txt = "ACCESS_DENIED - Server is busy"; break;
+        case SERVER_ERROR: txt = "SERVER_ERROR"; break;
+        default: txt = "Unknown State";
+    }
+
+    return txt;
+}
