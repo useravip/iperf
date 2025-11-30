@@ -126,6 +126,7 @@ struct iperf_interval_results
     long rtt;
     long rttvar;
     long pmtu;
+    long reorder;
 };
 
 struct iperf_stream_result
@@ -137,6 +138,7 @@ struct iperf_stream_result
     atomic_iperf_size_t bytes_sent_omit;
     long stream_prev_total_retrans;
     long stream_retrans;
+    long stream_reorder;
     long stream_max_rtt;
     long stream_min_rtt;
     long stream_sum_rtt;
@@ -180,10 +182,15 @@ struct iperf_settings
     char      *client_password;
     EVP_PKEY  *client_rsa_pubkey;
 #endif // HAVE_SSL
+    int       skip_rx_copy;         /* Whether to ignore received messages data, using MSG_TRUNC option */
     int	      connect_timeout;	    /* socket connection timeout, in ms */
     int       idle_timeout;         /* server idle time timeout */
     unsigned int snd_timeout; /* Timeout for sending tcp messages in active mode, in us */
     struct iperf_time rcv_timeout;  /* Timeout for receiving messages in active mode, in us */
+    int       cntl_ka;              /* Use Control TCP connection Keepalive */
+    int       cntl_ka_keepidle;     /* Control TCP connection Keepalive idle time (TCP_KEEPIDLE) */
+    int       cntl_ka_interval;     /* Control TCP connection Keepalive interval between retries (TCP_KEEPINTV) */
+    int       cntl_ka_count;        /* Control TCP connection Keepalive number of retries (TCP_KEEPCNT) */
 };
 
 struct iperf_test;
@@ -193,6 +200,7 @@ struct iperf_stream
     struct iperf_test* test;
 
     pthread_t thr;
+    int thread_created;
     int       done;
 
     /* configurable members */
@@ -304,6 +312,7 @@ struct iperf_test
     int       server_port;
     int       omit;                             /* duration of omit period (-O flag) */
     int       duration;                         /* total duration of test (-t flag) */
+    int       max_server_duration;               /* maximum possible duration of test as enforced by the server (--max-server-duration flag) */
     char     *diskfile_name;			/* -F option */
     int       affinity, server_affinity;	/* -A option */
 #if defined(HAVE_CPUSET_SETAFFINITY)
@@ -342,6 +351,9 @@ struct iperf_test
     int	      verbose;                          /* -V option - verbose mode */
     int	      json_output;                      /* -J option - JSON output */
     int	      json_stream;                      /* --json-stream */
+    int       json_stream_full_output;          /* --json-stream-full-output */
+    void      (*json_callback) (struct iperf_test *, char *); /* allow user apps to receive the
+                                                JSON strings,instead of writing them to the output file */
     int	      zerocopy;                         /* -Z option - use sendfile */
     int       debug;				/* -d option - enable debug */
     enum      debug_level debug_level;          /* -d option option - level of debug messages to show */
@@ -352,6 +364,7 @@ struct iperf_test
     int	      repeating_payload;                /* --repeating-payload */
     int       timestamps;			/* --timestamps */
     char     *timestamp_format;
+    int       mptcp;				/* -m, --mptcp */
 
     char     *json_output_string; /* rendered JSON output if json_output is set */
     /* Select related parameters */
@@ -449,6 +462,7 @@ struct iperf_test
 #define MIN_INTERVAL 0.1
 #define MAX_INTERVAL 60.0
 #define MAX_TIME 86400
+#define MAX_OMIT_TIME 600
 #define MAX_BURST 1000
 #define MAX_MSS (9 * 1024)
 #define MAX_STREAMS 128

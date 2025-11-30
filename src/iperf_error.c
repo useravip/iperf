@@ -60,11 +60,11 @@ iperf_err(struct iperf_test *test, const char *format, ...)
     if (test != NULL && test->json_output && test->json_top != NULL)
 	cJSON_AddStringToObject(test->json_top, "error", str);
     else {
-        if (pthread_mutex_lock(&(test->print_mutex)) != 0) {
+        if (test != NULL && pthread_mutex_lock(&(test->print_mutex)) != 0) {
             perror("iperf_err: pthread_mutex_lock");
         }
 
-	if (test && test->outfile && test->outfile != stdout) {
+	if (test != NULL && test->outfile != NULL && test->outfile != stdout) {
 	    if (ct) {
 		fprintf(test->outfile, "%s", ct);
 	    }
@@ -77,7 +77,7 @@ iperf_err(struct iperf_test *test, const char *format, ...)
 	    fprintf(stderr, "iperf3: %s\n", str);
 	}
 
-        if (pthread_mutex_unlock(&(test->print_mutex)) != 0) {
+        if (test != NULL && pthread_mutex_unlock(&(test->print_mutex)) != 0) {
             perror("iperf_err: pthread_mutex_unlock");
         }
 
@@ -85,11 +85,30 @@ iperf_err(struct iperf_test *test, const char *format, ...)
     va_end(argp);
 }
 
-/* Do a printf to stderr or log file as appropriate, then exit. */
+/* Do a printf to stderr or log file as appropriate, then exit(0). */
+void
+iperf_signormalexit(struct iperf_test *test, const char *format, ...)
+{
+    va_list argp;
+
+    va_start(argp, format);
+    iperf_exit(test, 0, format, argp);
+}
+
+/* Do a printf to stderr or log file as appropriate, then exit(1). */
 void
 iperf_errexit(struct iperf_test *test, const char *format, ...)
 {
     va_list argp;
+
+    va_start(argp, format);
+    iperf_exit(test, 1, format, argp);
+}
+
+/* Do a printf to stderr or log file as appropriate, then exit. */
+void
+iperf_exit(struct iperf_test *test, int exit_code, const char *format, va_list argp)
+{
     char str[1000];
     time_t now;
     struct tm *ltm = NULL;
@@ -103,7 +122,6 @@ iperf_errexit(struct iperf_test *test, const char *format, ...)
 	ct = iperf_timestrerr;
     }
 
-    va_start(argp, format);
     vsnprintf(str, sizeof(str), format, argp);
     if (test != NULL && test->json_output) {
         if (test->json_top != NULL) {
@@ -111,7 +129,7 @@ iperf_errexit(struct iperf_test *test, const char *format, ...)
         }
 	iperf_json_finish(test);
     } else {
-        if (pthread_mutex_lock(&(test->print_mutex)) != 0) {
+        if (test != NULL && pthread_mutex_lock(&(test->print_mutex)) != 0) {
             perror("iperf_errexit: pthread_mutex_lock");
         }
 
@@ -128,7 +146,7 @@ iperf_errexit(struct iperf_test *test, const char *format, ...)
 	    fprintf(stderr, "iperf3: %s\n", str);
 	}
 
-        if (pthread_mutex_unlock(&(test->print_mutex)) != 0) {
+        if (test != NULL && pthread_mutex_unlock(&(test->print_mutex)) != 0) {
             perror("iperf_errexit: pthread_mutex_unlock");
         }
     }
@@ -136,10 +154,11 @@ iperf_errexit(struct iperf_test *test, const char *format, ...)
     va_end(argp);
     if (test)
         iperf_delete_pidfile(test);
-    exit(1);
+    exit(exit_code);
 }
 
-int i_errno;
+int i_errno = 0;
+const char *errarg = NULL;
 
 char *
 iperf_strerror(int int_errno)
@@ -182,7 +201,7 @@ iperf_strerror(int int_errno)
         case IEINTERVAL:
             snprintf(errstr, len, "invalid report interval (min = %g, max = %g seconds)", MIN_INTERVAL, MAX_INTERVAL);
             break;
-    case IEBIND: /* UNUSED */
+        case IEBIND: /* UNUSED */
             snprintf(errstr, len, "--bind must be specified to use --cport");
             break;
         case IEUDPBLOCKSIZE:
@@ -213,7 +232,7 @@ iperf_strerror(int int_errno)
             snprintf(errstr, len, "this OS does not support sendfile");
             break;
         case IEOMIT:
-            snprintf(errstr, len, "bogus value for --omit");
+            snprintf(errstr, len, "bogus value for --omit (maximum = %d seconds)", MAX_OMIT_TIME);
             break;
         case IEUNIMP:
             snprintf(errstr, len, "an option you are trying to set is not implemented yet");
@@ -376,6 +395,8 @@ iperf_strerror(int int_errno)
             break;
         case IEUDPFILETRANSFER:
             snprintf(errstr, len, "cannot transfer file using UDP");
+        case IEUNITVAL:
+            snprintf(errstr, len, "invalid unit value or suffix: '%s'", errarg);
             break;
         case IERVRSONLYRCVTIMEOUT:
             snprintf(errstr, len, "client receive timeout is valid only in receiving mode");
@@ -464,7 +485,10 @@ iperf_strerror(int int_errno)
 	case IETOTALRATE:
 	    snprintf(errstr, len, "total required bandwidth is larger than server limit");
             break;
-    case IESKEWTHRESHOLD:
+        case IETOTALINTERVAL:
+            snprintf(errstr, len, "invalid time interval for calculating average data rate");
+            break;
+        case IESKEWTHRESHOLD:
 	    snprintf(errstr, len, "skew threshold must be a positive number");
             break;
 	case IEIDLETIMEOUT:
@@ -473,16 +497,16 @@ iperf_strerror(int int_errno)
 	case IEBINDDEV:
 	    snprintf(errstr, len, "Unable to bind-to-device (check perror, maybe permissions?)");
             break;
-    case IEBINDDEVNOSUPPORT:
+        case IEBINDDEVNOSUPPORT:
 	    snprintf(errstr, len, "`<ip>%%<dev>` is not supported as system does not support bind to device");
             break;
-    case IEHOSTDEV:
+        case IEHOSTDEV:
 	    snprintf(errstr, len, "host device name (ip%%<dev>) is supported (and required) only for IPv6 link-local address");
             break;        
 	case IENOMSG:
 	    snprintf(errstr, len, "idle timeout for receiving data");
             break;
-    case IESETDONTFRAGMENT:
+        case IESETDONTFRAGMENT:
 	    snprintf(errstr, len, "unable to set IP Do-Not-Fragment flag");
             break;
         case IESETUSERTIMEOUT:
@@ -510,7 +534,28 @@ iperf_strerror(int int_errno)
 	    break;
 	case IEPTHREADATTRDESTROY:
             snprintf(errstr, len, "unable to destroy thread attributes");
+        case IECNTLKA:
+            snprintf(errstr, len, "control connection Keepalive period should be larger than the full retry period (interval * count)");
             perr = 1;
+            break;
+        case IESETCNTLKA:
+            snprintf(errstr, len, "unable to set socket keepalive (SO_KEEPALIVE) option");
+            perr = 1;
+            break;
+        case IESETCNTLKAKEEPIDLE:
+            snprintf(errstr, len, "unable to set socket keepalive TCP period (TCP_KEEPIDLE) option");
+            perr = 1;
+            break;
+        case IESETCNTLKAINTERVAL:
+            snprintf(errstr, len, "unable to set/get socket keepalive TCP retry interval (TCP_KEEPINTVL) option");
+            perr = 1;
+            break;
+        case IESETCNTLKACOUNT:
+            snprintf(errstr, len, "unable to set/get socket keepalive TCP number of retries (TCP_KEEPCNT) option");
+            perr = 1;
+            break;
+        case IEMAXSERVERTESTDURATIONEXCEEDED:
+            snprintf(errstr, len, "client's requested duration exceeds the server's maximum permitted limit");
             break;
 	default:
 	    snprintf(errstr, len, "int_errno=%d", int_errno);

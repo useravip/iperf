@@ -184,6 +184,12 @@ iperf_accept(struct iperf_test *test)
         }
 #endif /* HAVE_TCP_USER_TIMEOUT */
 
+#if defined (HAVE_TCP_KEEPALIVE)
+        // Set Control Connection TCP Keepalive (especially useful for long UDP test sessions)
+        if (iperf_set_control_keepalive(test) < 0)
+            return -1;
+#endif //HAVE_TCP_KEEPALIVE
+
         if (Nread(test->ctrl_sck, test->cookie, COOKIE_SIZE, Ptcp) != COOKIE_SIZE) {
             /*
              * Note this error covers both the case of a system error
@@ -448,20 +454,23 @@ cleanup_server(struct iperf_test *test)
     SLIST_FOREACH(sp, &test->streams, streams) {
         int rc;
         sp->done = 1;
-        rc = pthread_cancel(sp->thr);
-        if (rc != 0 && rc != ESRCH) {
-            i_errno = IEPTHREADCANCEL;
-            errno = rc;
-            iperf_err(test, "cleanup_server in pthread_cancel - %s", iperf_strerror(i_errno));
-        }
-        rc = pthread_join(sp->thr, NULL);
-        if (rc != 0 && rc != ESRCH) {
-            i_errno = IEPTHREADJOIN;
-            errno = rc;
-            iperf_err(test, "cleanup_server in pthread_join - %s", iperf_strerror(i_errno));
-        }
-        if (test->debug_level >= DEBUG_LEVEL_INFO) {
-            iperf_printf(test, "Thread FD %d stopped\n", sp->socket);
+        if (sp->thread_created == 1) {
+            rc = pthread_cancel(sp->thr);
+            if (rc != 0 && rc != ESRCH) {
+                i_errno = IEPTHREADCANCEL;
+                errno = rc;
+                iperf_err(test, "cleanup_server in pthread_cancel - %s", iperf_strerror(i_errno));
+            }
+            rc = pthread_join(sp->thr, NULL);
+            if (rc != 0 && rc != ESRCH) {
+                i_errno = IEPTHREADJOIN;
+                errno = rc;
+                iperf_err(test, "cleanup_server in pthread_join - %s", iperf_strerror(i_errno));
+            }
+            if (test->debug_level >= DEBUG_LEVEL_INFO) {
+                iperf_printf(test, "Thread FD %d stopped\n", sp->socket);
+            }
+            sp->thread_created = 0;
         }
     }
     i_errno = i_errno_save;
@@ -909,6 +918,7 @@ iperf_run_server(struct iperf_test *test)
                             cleanup_server(test);
                             return -1;
                         }
+                        sp->thread_created = 1;
                         if (test->debug_level >= DEBUG_LEVEL_INFO) {
                             iperf_printf(test, "Thread FD %d created\n", sp->socket);
                         }
@@ -920,6 +930,10 @@ iperf_run_server(struct iperf_test *test)
                         i_errno = IEPTHREADATTRDESTROY;
                         cleanup_server(test);
                     };
+
+                    /* Reset receive-progress baseline after workers are ready */
+                    last_receive_blocks = test->blocks_received;
+                    iperf_time_now(&last_receive_time);
                 }
             }
         }

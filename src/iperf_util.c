@@ -105,7 +105,7 @@ void fill_with_repeating_pattern(void *out, size_t outsize)
  * Generate and return a cookie string
  *
  * Iperf uses this function to create test "cookies" which
- * server as unique test identifiers. These cookies are also
+ * serve as unique test identifiers. These cookies are also
  * used for the authentication of stream connections.
  * Assumes cookie has size (COOKIE_SIZE + 1) char's.
  */
@@ -428,6 +428,42 @@ iperf_json_printf(const char *format, ...)
     }
     va_end(argp);
     return o;
+}
+
+/********************** cJSON GetObjectItem w/ Type Helper ********************/
+cJSON * iperf_cJSON_GetObjectItemType(cJSON * j, char * item_string, int expected_type){
+    cJSON *j_p;
+    if((j_p = cJSON_GetObjectItem(j, item_string)) != NULL)
+        switch(expected_type){
+        case cJSON_True:
+            if(cJSON_IsBool(j_p))
+                return j_p;
+            else
+                iperf_err(NULL, "iperf_cJSON_GetObjectItemType mismatch %s", item_string);
+            break;
+        case cJSON_String:
+            if(cJSON_IsString(j_p))
+                return j_p;
+            else
+                iperf_err(NULL, "iperf_cJSON_GetObjectItemType mismatch %s", item_string);
+            break;
+        case cJSON_Number:
+            if(cJSON_IsNumber(j_p))
+                return j_p;
+            else
+                iperf_err(NULL, "iperf_cJSON_GetObjectItemType mismatch %s", item_string);
+            break;
+        case cJSON_Array:
+            if(cJSON_IsArray(j_p))
+                return j_p;
+            else
+                iperf_err(NULL, "iperf_cJSON_GetObjectItemType mismatch %s", item_string);
+            break;
+        default:
+            iperf_err(NULL, "unsupported type");
+	}
+
+    return NULL;
 }
 
 /* Debugging routine to dump out an fd_set. */
